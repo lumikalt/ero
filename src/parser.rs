@@ -1,3 +1,5 @@
+use std::fmt::{self, Display, Formatter};
+
 #[derive(Debug, Clone)]
 pub enum Functions {
     Plus,
@@ -17,7 +19,7 @@ pub enum Tokens {
     Function(Functions, Vec<Tokens>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Types {
     BinaryFn(Functions, Box<[Ast; 2]>),
     UnaryFn(Functions, Box<[Ast; 1]>),
@@ -31,26 +33,23 @@ impl From<Tokens> for Types {
         match token {
             Tokens::Var(v) => Types::Var(v),
             Tokens::Number(c) => Types::Constant(c),
-            Tokens::Function(f, args) => Types::BinaryFn(f, Box::new([
-                Ast::new(args[0].clone().into()),
-                Ast::new(args[1].clone().into())
-            ])),
+            Tokens::Function(f, args) => Types::BinaryFn(
+                f,
+                Box::new([
+                    Ast(args[0].clone().into()),
+                    Ast(args[1].clone().into()),
+                ]),
+            ),
         }
     }
 }
 
-#[derive(Debug)]
-pub struct Ast {
-    pub branch: Option<Box<Ast>>,
-    pub node: Types,
-}
+#[derive(Debug, Clone)]
+pub struct Ast(pub Types);
 
-impl Ast {
-    fn new(value: Types) -> Ast {
-        Ast {
-            branch: None,
-            node: value,
-        }
+impl Display for Ast {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result<(), fmt::Error> {
+        
     }
 }
 
@@ -81,31 +80,32 @@ pub fn tokenize(input: String) -> Vec<Tokens> {
 pub fn parse(tokens: Vec<Tokens>) -> Ast {
     use Tokens::*;
 
-    let mut ast = Ast {
-        branch: None,
-        node: Types::Todo,
-    };
+    let mut ast = Ast(Types::Todo);
     let mut tokens = tokens.into_iter().peekable();
 
     while let Some(token) = tokens.next() {
-        ast.node = match token {
+        ast.0 = match token {
             Number(c) => {
                 if let Some(next) = tokens.next() {
                     match next {
                         Function(f, args) => {
                             if args.len() == 1 {
-                                Types::UnaryFn(
-                                    f, Box::new([parse(vec![args[0].clone().into()])])
-                                )
+                                Types::UnaryFn(f, Box::new([parse(vec![args[0].clone().into()])]))
                             } else if args.len() == 2 {
-                                Types::BinaryFn(f, Box::new([Ast::new(args[0].clone().into()), Ast::new(args[1].clone().into())]))
+                                Types::BinaryFn(
+                                    f,
+                                    Box::new([
+                                        Ast(args[0].clone().into()),
+                                        Ast(args[1].clone().into()),
+                                    ]),
+                                )
                             } else {
                                 unreachable!()
                             }
                         }
                         Var(var) => Types::BinaryFn(
                             Functions::Times,
-                            Box::new([Ast::new(Types::Constant(c)), Ast::new(Types::Var(var))]),
+                            Box::new([Ast(Types::Constant(c)), Ast(Types::Var(var))]),
                         ),
                         _ => unreachable!(),
                     }

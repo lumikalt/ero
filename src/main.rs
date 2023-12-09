@@ -1,5 +1,6 @@
-use ero::parser::{tokenize, parse};
+use ero::engine::derive;
+use ero::parser::{parse, tokenize};
 
 fn main() {
-    dbg!(parse(tokenize("2 x".to_string())));
+    dbg!(derive(parse(tokenize("2x".to_string()))));
 }
