@@ -1,121 +1,107 @@
 use std::fmt::{self, Display, Formatter};
 
+use lazy_static::lazy_static;
+use pest::{iterators::Pairs, pratt_parser::PrattParser, Parser};
+use pest_derive::Parser;
+
+#[derive(Parser)]
+#[grammar = "grammar.pest"]
+struct Equation;
+
+lazy_static! {
+    static ref PRATT_PARSER: PrattParser<Rule> = {
+        use pest::pratt_parser::{Assoc::*, Op};
+        use Rule::*;
+
+        PrattParser::new()
+            .op(Op::infix(add, Left) | Op::infix(sub, Left))
+            .op(Op::infix(mul, Left) | Op::infix(div, Left))
+            .op(Op::infix(pow, Right))
+            .op(Op::prefix(neg))
+    };
+}
+
 #[derive(Debug, Clone)]
-pub enum Functions {
+pub enum BinOp {
     Plus,
     Minus,
     Times,
     Divide,
     Pow,
-    Root(i32),
-    E,
-    Ln(i32),
 }
 
 #[derive(Debug, Clone)]
-pub enum Tokens {
+pub enum Expr {
+    Constant(i64),
     Var(char),
-    Number(f64),
-    Function(Functions, Vec<Tokens>),
+    BinaryFn {
+        op: BinOp,
+        lhs: Box<Expr>,
+        rhs: Box<Expr>,
+    },
 }
 
-#[derive(Debug, Clone)]
-pub enum Types {
-    BinaryFn(Functions, Box<[Ast; 2]>),
-    UnaryFn(Functions, Box<[Ast; 1]>),
-    Constant(f64),
-    Var(char),
-    Todo,
-}
-
-impl From<Tokens> for Types {
-    fn from(token: Tokens) -> Types {
-        match token {
-            Tokens::Var(v) => Types::Var(v),
-            Tokens::Number(c) => Types::Constant(c),
-            Tokens::Function(f, args) => Types::BinaryFn(
-                f,
-                Box::new([
-                    Ast(args[0].clone().into()),
-                    Ast(args[1].clone().into()),
-                ]),
-            ),
+impl Display for BinOp {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            BinOp::Plus => write!(f, "+"),
+            BinOp::Minus => write!(f, "-"),
+            BinOp::Times => write!(f, "*"),
+            BinOp::Divide => write!(f, "/"),
+            BinOp::Pow => write!(f, "^"),
         }
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct Ast(pub Types);
+pub fn parse_expr(pairs: Pairs<Rule>) -> Expr {
+    let pairs = dbg!(pairs);
+    PRATT_PARSER
+        .map_primary(|primary| match primary.as_rule() {
+            Rule::int => Expr::Constant(primary.as_str().parse::<i64>().unwrap()),
+            Rule::var => Expr::Var(dbg!(primary.as_str().chars().next().unwrap())),
+            Rule::expr => parse_expr(dbg!(primary.into_inner())),
+            _ => unreachable!(),
+        })
+        .map_infix(|lhs, infix, rhs| {
+            let lhs = Box::new(lhs);
+            let rhs = Box::new(rhs);
 
-impl Display for Ast {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result<(), fmt::Error> {
-        
-    }
+            match infix.as_rule() {
+                Rule::add => Expr::BinaryFn {
+                    op: BinOp::Plus,
+                    lhs,
+                    rhs,
+                },
+                Rule::sub => Expr::BinaryFn {
+                    op: BinOp::Minus,
+                    lhs,
+                    rhs,
+                },
+                Rule::mul => Expr::BinaryFn {
+                    op: BinOp::Times,
+                    lhs,
+                    rhs,
+                },
+                Rule::div => Expr::BinaryFn {
+                    op: BinOp::Divide,
+                    lhs,
+                    rhs,
+                },
+                Rule::pow => Expr::BinaryFn {
+                    op: BinOp::Pow,
+                    lhs,
+                    rhs,
+                },
+                _ => unreachable!(),
+            }
+        })
+        .parse(pairs)
 }
 
-pub fn tokenize(input: String) -> Vec<Tokens> {
-    let mut chars = input.chars().peekable();
-    let mut tokens = vec![];
-
-    while let Some(c) = chars.next() {
-        let token = match c {
-            '0'..='9' => {
-                let mut num = String::new();
-                num.push(c);
-                while let Some('0'..='9') = chars.peek() {
-                    num.push(dbg!(chars.next().unwrap()));
-                }
-                Tokens::Number(num.parse::<f64>().unwrap())
-            }
-            'x' => Tokens::Var(c),
-            _ => unimplemented!(),
-        };
-
-        tokens.push(token);
-    }
-
-    tokens
-}
-
-pub fn parse(tokens: Vec<Tokens>) -> Ast {
-    use Tokens::*;
-
-    let mut ast = Ast(Types::Todo);
-    let mut tokens = tokens.into_iter().peekable();
-
-    while let Some(token) = tokens.next() {
-        ast.0 = match token {
-            Number(c) => {
-                if let Some(next) = tokens.next() {
-                    match next {
-                        Function(f, args) => {
-                            if args.len() == 1 {
-                                Types::UnaryFn(f, Box::new([parse(vec![args[0].clone().into()])]))
-                            } else if args.len() == 2 {
-                                Types::BinaryFn(
-                                    f,
-                                    Box::new([
-                                        Ast(args[0].clone().into()),
-                                        Ast(args[1].clone().into()),
-                                    ]),
-                                )
-                            } else {
-                                unreachable!()
-                            }
-                        }
-                        Var(var) => Types::BinaryFn(
-                            Functions::Times,
-                            Box::new([Ast(Types::Constant(c)), Ast(Types::Var(var))]),
-                        ),
-                        _ => unreachable!(),
-                    }
-                } else {
-                    break;
-                }
-            }
-            _ => unimplemented!(),
-        };
-    }
-
-    ast
+pub fn parse(input: &str) -> Expr {
+    Equation::parse(Rule::expr, input)
+        .unwrap_or_else(|e| unreachable!("{}", e))
+        .map(|pairs| parse_expr(pairs.into_inner().next().unwrap().into_inner()))
+        .next()
+        .unwrap()
 }

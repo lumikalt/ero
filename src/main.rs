@@ -1,6 +1,10 @@
 use ero::engine::derive;
-use ero::parser::{parse, tokenize};
+use ero::parser::parse;
 
 fn main() {
-    dbg!(derive(parse(tokenize("2x".to_string()))));
+    let expr = "2*x+1".to_string();
+    let result = derive(parse(&expr.clone()), 'x');
+
+    // println!("({})' = {}", expr.clone(), dbg!(result).to_string());
+    dbg!(result);
 }
