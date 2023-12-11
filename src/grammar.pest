@@ -1,4 +1,4 @@
-WHITESPACE  =  _{ " " | "\t" | NEWLINE }
+WHITESPACE  =  _{ " " }
 
 equation    =   { SOI ~ expr ~ EOI }
   expr      =   { prefix* ~ primary ~ postfix* ~ (infix ~ prefix* ~ primary ~ postfix* )* }

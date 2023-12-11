@@ -54,54 +54,45 @@ impl Display for BinOp {
 }
 
 pub fn parse_expr(pairs: Pairs<Rule>) -> Expr {
-    let pairs = dbg!(pairs);
-    PRATT_PARSER
+    dbg!(PRATT_PARSER
         .map_primary(|primary| match primary.as_rule() {
-            Rule::int => Expr::Constant(primary.as_str().parse::<i64>().unwrap()),
+            Rule::int => Expr::Constant(dbg!(primary.as_str().parse::<i64>().unwrap())),
             Rule::var => Expr::Var(dbg!(primary.as_str().chars().next().unwrap())),
-            Rule::expr => parse_expr(dbg!(primary.into_inner())),
-            _ => unreachable!(),
+            Rule::expr => parse_expr(primary.into_inner()),
+            _ => unreachable!("{}", primary.as_str()),
         })
         .map_infix(|lhs, infix, rhs| {
             let lhs = Box::new(lhs);
             let rhs = Box::new(rhs);
 
-            match infix.as_rule() {
-                Rule::add => Expr::BinaryFn {
-                    op: BinOp::Plus,
-                    lhs,
-                    rhs,
-                },
-                Rule::sub => Expr::BinaryFn {
-                    op: BinOp::Minus,
-                    lhs,
-                    rhs,
-                },
-                Rule::mul => Expr::BinaryFn {
-                    op: BinOp::Times,
-                    lhs,
-                    rhs,
-                },
-                Rule::div => Expr::BinaryFn {
-                    op: BinOp::Divide,
-                    lhs,
-                    rhs,
-                },
-                Rule::pow => Expr::BinaryFn {
-                    op: BinOp::Pow,
-                    lhs,
-                    rhs,
-                },
+            let op = match infix.as_rule() {
+                Rule::add => BinOp::Plus,
+                Rule::sub => BinOp::Minus,
+                Rule::mul => BinOp::Times,
+                Rule::div => BinOp::Divide,
+                Rule::pow => BinOp::Pow,
                 _ => unreachable!(),
-            }
+            };
+
+            Expr::BinaryFn { op, lhs, rhs }
         })
-        .parse(pairs)
+        .map_prefix(|prefix, rhs| {
+            let op = match prefix.as_rule() {
+                Rule::neg => BinOp::Minus,
+                _ => unreachable!(),
+            };
+
+            let lhs = Box::new(Expr::Constant(0));
+            let rhs = Box::new(rhs);
+
+            Expr::BinaryFn { op, lhs, rhs }
+        })
+        .parse(pairs))
 }
 
 pub fn parse(input: &str) -> Expr {
-    Equation::parse(Rule::expr, input)
-        .unwrap_or_else(|e| unreachable!("{}", e))
-        .map(|pairs| parse_expr(pairs.into_inner().next().unwrap().into_inner()))
-        .next()
-        .unwrap()
+    match Equation::parse(Rule::equation, input) {
+        Ok(mut pairs) => parse_expr(pairs.next().unwrap().into_inner()),
+        Err(e) => unimplemented!("{}", e),
+    }
 }
