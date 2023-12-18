@@ -1,10 +1,9 @@
-use ero::engine::derive;
-use ero::parser::parse;
+use ero::{parser::parse, engine::{derive, simplify}};
 
 fn main() {
-    let expr = "2".to_string();
-    let result = derive(parse(&expr.clone()), 'x');
+    let src = "-LN(EXP(x))^3";
 
-    // println!("({})' = {}", expr.clone(), dbg!(result).to_string());
-    dbg!(result);
+    let result = simplify(simplify(derive(dbg!(simplify(parse(src))), 'x')));
+
+    println!("({})' = {}", src, result);
 }

@@ -1,0 +1,39 @@
+use crate::parser::{BinOp, Expr, Func};
+use std::str::FromStr;
+
+grammar;
+
+Term: Expr = {
+    Num => Expr::Constant(<>),
+    Var => Expr::Var(<>),
+
+    "(" <Expr> ")",
+}
+
+Num: i64 = r"[0-9]+" => <>.parse::<i64>().expect("Failed to parse integer");
+Var: char = r"[a-z]" => <>.chars().next().expect("Failed to parse variable");
+
+pub Expr: Expr = {
+    #[precedence(level="0")]
+    Term,
+    "-" <Expr> => Expr::Neg(Box::new(<>)),
+    FunctionCall,
+
+    #[precedence(level="1")] #[assoc(side="right")]
+    <l:Expr> "^" <r:Expr> => Expr::BinaryFn{op: BinOp::Power, lhs: Box::new(l), rhs: Box::new(r)},
+
+    #[precedence(level="2")] #[assoc(side="left")]
+    <l:Expr> "*" <r:Expr> => Expr::BinaryFn{op: BinOp::Times, lhs: Box::new(l), rhs: Box::new(r)},
+    <l:Expr> "/" <r:Expr> => Expr::BinaryFn{op: BinOp::Divide, lhs: Box::new(l), rhs: Box::new(r)},
+
+    #[precedence(level="3")] #[assoc(side="left")]
+    <l:Expr> "+" <r:Expr> => Expr::BinaryFn{op: BinOp::Plus, lhs: Box::new(l), rhs: Box::new(r)},
+    <l:Expr> "-" <r:Expr> => Expr::BinaryFn{op: BinOp::Minus, lhs: Box::new(l), rhs: Box::new(r)},
+}
+
+
+FunctionCall: Expr = {
+    // <name:r"[A-Z]*"> "(" <head:Expr> <cons:("," <Expr>)*> ")" => Expr::FunctionCall{name, arg: {}},
+    <name:r"[A-Z]*"> <arg:Term> => Expr::FunctionCall{op: Func::from_str(&*name.to_lowercase()).expect("Error"), arg: Box::new(arg)},
+    "ROOT[" <base: Num> "]" <arg:Term> => Expr::FunctionCall{op: Func::Root(base as usize), arg: Box::new(arg)},
+};
